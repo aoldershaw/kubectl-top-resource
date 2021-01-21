@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -e -u
+
+exec 3>&1 # make stdout available as fd 3 for the result
+exec 1>&2 # redirect all output to stderr for logging
+
+payload=/tmp/request
+cat > $payload <&0
+
+out=/tmp/out
+
+CA_PATH=/tmp/ca.crt
+
+username=$(jq -r '.source.username // ""' < $payload)
+password=$(jq -r '.source.password // ""' < $payload)
+server=$(jq -r '.source.server // ""' < $payload)
+jq -r '.source.ca // ""' < $payload > $CA_PATH
+namespace=$(jq -r '.source.namespace // ""' < $payload)
+labels=$(jq -r '.source.labels // ""' < $payload)
+container_name=$(jq -r '.source.container_name // ""' < $payload)
+mem_threshold_mb=$(jq -r '.source.mem_threshold_mb // ""' < $payload)
+cpu_threshold_m=$(jq -r '.source.cpu_threshold_m // ""' < $payload)
+
+jq -r '.version // ""' < $payload >> $out
+
+top_flags="--containers --no-headers"
+if [ -n "$labels" ]; then
+  top_flags="$top_flags -l $labels"
+fi
+
+kubectl_flags="--username $username --password $password --server $server --certificate-authority $CA_PATH"
+if [ -n "$namespace" ]; then
+  kubectl_flags="$kubectl_flags -n $namespace"
+fi
+
+now="$(date -u +"%FT%H%MZ")"
+kubectl $kubectl_flags top pod $top_flags | \
+  awk -v container_name="$container_name" '$2==container_name {print $0}' | \
+    while read pod container cpu mem; do
+      if [[ (-z $mem_threshold_mb || ${mem%"Mi"} -ge $mem_threshold_mb) && (-z $cpu_threshold_m || ${cpu%"m"} -ge $cpu_threshold_m) ]]; then
+        jq -n '{ "namespace": $ns, "pod": $pod, "container": $container, "mem": $mem, "cpu": $cpu, "date": $date }' \
+          --arg ns "$namespace" \
+          --arg pod "$pod" \
+          --arg container "$container" \
+          --arg mem "$mem" \
+          --arg cpu "$cpu" \
+          --arg date "$now" >> $out
+      fi
+    done
+
+cat $out | jq -s '.' >&3

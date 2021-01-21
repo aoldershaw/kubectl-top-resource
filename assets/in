@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e -u
+
+jq -r '.version' <&0 > $1/data.json
+
+jq -n '{version: $version[0]}' --slurpfile version $1/data.json
