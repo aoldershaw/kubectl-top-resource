@@ -38,6 +38,7 @@ now="$(date -u +"%FT%H%MZ")"
 kubectl $kubectl_flags top pod $top_flags | \
   awk -v container_name="$container_name" '$2==container_name {print $0}' | \
     while read pod container cpu mem; do
+      echo "$pod: cpu=$cpu mem=$mem"
       if [[ (-z $mem_threshold_mb || ${mem%"Mi"} -ge $mem_threshold_mb) && (-z $cpu_threshold_m || ${cpu%"m"} -ge $cpu_threshold_m) ]]; then
         jq -n '{ "namespace": $ns, "pod": $pod, "container": $container, "mem": $mem, "cpu": $cpu, "date": $date }' \
           --arg ns "$namespace" \
