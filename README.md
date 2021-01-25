@@ -33,6 +33,7 @@ resources:
     labels: app=web
     container_name: web
     mem_threshold_mb: 512
+    time_between_s: 600 # Only emit new versions every 10 minutes for a given pod/container
 
 - name: notify
   type: slack-notifier
