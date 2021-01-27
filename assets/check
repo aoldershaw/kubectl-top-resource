@@ -48,14 +48,15 @@ kubectl $kubectl_flags top pod $top_flags | \
     while read pod container cpu mem; do
       echo "$pod: cpu=$cpu mem=$mem"
 
+      satisfies=true
       if [[ ! (-z $mem_threshold_mb || ${mem%"Mi"} -ge $mem_threshold_mb) ]]; then
         echo "  does not meet mem threshold (${mem_threshold_mb}Mi)"
-        continue
+        satisfies=false
       fi
 
       if [[ ! (-z $cpu_threshold_m || ${cpu%"m"} -ge $cpu_threshold_m) ]]; then
         echo "  does not meet cpu threshold (${cpu_threshold_m}m)"
-        continue
+        satisfies=false
       fi
 
       if [[ ($pod = $prev_pod) && ($container = $prev_container) && ($namespace = $prev_ns) ]]; then
@@ -65,7 +66,7 @@ kubectl $kubectl_flags top pod $top_flags | \
           echo "    prev emission:      $prev_timestamp"
           echo "    cur time between:   $diff_seconds"
           echo "    req'd time between: ${time_between_s}s"
-          continue
+          satisfies=false
         fi
 
         diff_mb=$(expr ${mem%"Mi"} - ${prev_mem%"Mi"})
@@ -74,19 +75,20 @@ kubectl $kubectl_flags top pod $top_flags | \
           echo "    prev emission:      $prev_mem"
           echo "    cur memory delta:   ${diff_mb}Mi"
           echo "    req'd memory delta: ${mem_increase_mb}Mi"
-          continue
+          satisfies=false
         fi
       fi
 
-      echo "  meets all requirements"
-
-      jq -n '{ "namespace": $namespace, "pod": $pod, "container": $container, "mem": $mem, "cpu": $cpu, "date": $date }' \
-        --arg namespace "$namespace" \
-        --arg pod "$pod" \
-        --arg container "$container" \
-        --arg mem "$mem" \
-        --arg cpu "$cpu" \
-        --arg date "$now" >> $out
+      if [[ $satisfies = "true" ]]; then
+        echo "  meets all requirements"
+        jq -n '{ "namespace": $namespace, "pod": $pod, "container": $container, "mem": $mem, "cpu": $cpu, "date": $date }' \
+          --arg namespace "$namespace" \
+          --arg pod "$pod" \
+          --arg container "$container" \
+          --arg mem "$mem" \
+          --arg cpu "$cpu" \
+          --arg date "$now" >> $out
+      fi
     done
 
 cat $out | jq -s '.' >&3
