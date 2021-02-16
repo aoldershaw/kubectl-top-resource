@@ -70,7 +70,7 @@ kubectl $kubectl_flags top pod $top_flags | \
         fi
 
         diff_mb=$(expr ${mem%"Mi"} - ${prev_mem%"Mi"})
-        if [[ ! ($diff_mb -ge $mem_increase_mb) ]]; then
+        if [[ ($mem_increase_mb -gt 0) && ($diff_mb -lt $mem_increase_mb) ]]; then
           echo "  memory has not increased enough since last emission"
           echo "    prev emission:      $prev_mem"
           echo "    cur memory delta:   ${diff_mb}Mi"
